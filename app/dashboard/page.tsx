@@ -24,6 +24,7 @@ export default function Dashboard() {
   const [userData, setUserData] = useState<UserData | null>(null);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [loading, setLoading] = useState(true);
+  const [deleting, setDeleting] = useState<string | null>(null);
 
   useEffect(() => {
     const userId = localStorage.getItem('userId');
@@ -33,30 +34,63 @@ export default function Dashboard() {
       return;
     }
 
-    const fetchData = async () => {
-      try {
-        // Fetch user data
-        const userResponse = await fetch(`/api/user/${userId}`);
-        if (!userResponse.ok) throw new Error('Failed to fetch user');
-        const userData = await userResponse.json();
-        setUserData(userData);
-
-        // Fetch expenses
-        const expenseResponse = await fetch(`/api/expenses?userId=${userId}`);
-        if (!expenseResponse.ok) throw new Error('Failed to fetch expenses');
-        const expenseData = await expenseResponse.json();
-        setExpenses(expenseData);
-      } catch (error) {
-        console.error('Error fetching data:', error);
-        localStorage.removeItem('userId');
-        router.push('/onboarding');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchData();
+    fetchData(userId);
   }, [router]);
+
+  const fetchData = async (userId: string) => {
+    try {
+      // Fetch user data
+      const userResponse = await fetch(`/api/user/${userId}`);
+      if (!userResponse.ok) throw new Error('Failed to fetch user');
+      const userData = await userResponse.json();
+      setUserData(userData);
+
+      // Fetch expenses
+      await fetchExpenses(userId);
+    } catch (error) {
+      console.error('Error fetching data:', error);
+      localStorage.removeItem('userId');
+      router.push('/onboarding');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchExpenses = async (userId: string) => {
+    try {
+      const expenseResponse = await fetch(`/api/expenses?userId=${userId}`);
+      if (!expenseResponse.ok) throw new Error('Failed to fetch expenses');
+      const expenseData = await expenseResponse.json();
+      setExpenses(expenseData);
+    } catch (error) {
+      console.error('Error fetching expenses:', error);
+    }
+  };
+
+  const handleDelete = async (expenseId: string) => {
+    if (!confirm('Are you sure you want to delete this expense?')) return;
+    
+    setDeleting(expenseId);
+    try {
+      const response = await fetch(`/api/expenses/${expenseId}`, {
+        method: 'DELETE',
+      });
+
+      if (response.ok) {
+        const userId = localStorage.getItem('userId');
+        if (userId) {
+          await fetchExpenses(userId);
+        }
+      } else {
+        alert('Failed to delete expense');
+      }
+    } catch (error) {
+      console.error('Error deleting expense:', error);
+      alert('Network error. Please try again.');
+    } finally {
+      setDeleting(null);
+    }
+  };
 
   // Calculate total spent
   const totalSpent = expenses.reduce((sum, exp) => sum + exp.amount, 0);
@@ -151,6 +185,7 @@ export default function Dashboard() {
                     <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Category</th>
                     <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Amount</th>
                     <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Date</th>
+                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Action</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -165,6 +200,15 @@ export default function Dashboard() {
                       <td className="py-3 px-4 font-semibold text-gray-900">QAR {expense.amount.toFixed(2)}</td>
                       <td className="py-3 px-4 text-sm text-gray-600">
                         {new Date(expense.date).toLocaleDateString()}
+                      </td>
+                      <td className="py-3 px-4">
+                        <button
+                          onClick={() => handleDelete(expense.id)}
+                          disabled={deleting === expense.id}
+                          className="text-red-600 hover:text-red-800 text-sm font-medium disabled:opacity-50"
+                        >
+                          {deleting === expense.id ? 'Deleting...' : 'Delete'}
+                        </button>
                       </td>
                     </tr>
                   ))}
