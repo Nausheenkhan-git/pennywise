@@ -1,123 +1,110 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
 
-interface UserData {
-  id: string;
-  email: string;
-  monthlyIncome: number;
-  savingsGoal: number;
-}
-
-export default function Dashboard() {
+export default function Onboarding() {
   const router = useRouter();
-  const [userData, setUserData] = useState<UserData | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const [formData, setFormData] = useState({
+    email: '',
+    monthlyIncome: '',
+    savingsGoal: '',
+  });
 
-  useEffect(() => {
-    const userId = localStorage.getItem('userId');
-    console.log('User ID from localStorage:', userId);
-    
-    if (!userId) {
-      console.log('No userId found, redirecting to onboarding');
-      router.push('/onboarding');
-      return;
-    }
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
 
-    fetchUserData(userId);
-  }, [router]);
-
-  const fetchUserData = async (userId: string) => {
     try {
-      console.log('Fetching user data for ID:', userId);
-      const response = await fetch(`/api/user/${userId}`);
-      console.log('Response status:', response.status);
-      
+      const response = await fetch('/api/user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: formData.email,
+          monthlyIncome: parseFloat(formData.monthlyIncome),
+          savingsGoal: parseFloat(formData.savingsGoal),
+        }),
+      });
+
+      const data = await response.json();
+
       if (response.ok) {
-        const data = await response.json();
-        console.log('User data received:', data);
-        setUserData(data);
+        localStorage.setItem('userId', data.userId);
+        router.push('/dashboard');
       } else {
-        const errorData = await response.json();
-        console.error('Error response:', errorData);
-        if (response.status === 404) {
-          localStorage.removeItem('userId');
-          router.push('/onboarding');
-        }
+        alert(data.error || 'Failed to create account');
+        setLoading(false);
       }
     } catch (error) {
-      console.error('Failed to fetch user data:', error);
-    } finally {
+      alert('Network error. Please check your connection.');
       setLoading(false);
     }
   };
 
-  if (loading) {
-    return (
-      <div className="flex justify-center items-center min-h-screen">
-        <div className="text-gray-600">Loading...</div>
-      </div>
-    );
-  }
-
-  if (!userData) {
-    return (
-      <div className="flex justify-center items-center min-h-screen">
-        <div className="text-gray-600">
-          User not found. Please <Link href="/onboarding" className="text-blue-600 underline">sign up</Link> again.
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="flex justify-between items-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
-          <Link
-            href="/expenses/add"
-            className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors"
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+      <div className="max-w-md w-full bg-white rounded-xl shadow-lg p-8">
+        <div className="text-center mb-8">
+          <h1 className="text-3xl font-bold text-gray-900">💰 PenneyWise</h1>
+          <p className="text-gray-600 mt-2">Set up your budget profile</p>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Email
+            </label>
+            <input
+              type="email"
+              required
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition text-gray-900 bg-white"
+              placeholder="your@email.com"
+              value={formData.email}
+              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Monthly Income (QAR)
+            </label>
+            <input
+              type="number"
+              required
+              min="0"
+              step="0.01"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition text-gray-900 bg-white"
+              placeholder="e.g., 25000"
+              value={formData.monthlyIncome}
+              onChange={(e) => setFormData({ ...formData, monthlyIncome: e.target.value })}
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Savings Goal (QAR)
+            </label>
+            <input
+              type="number"
+              required
+              min="0"
+              step="0.01"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition text-gray-900 bg-white"
+              placeholder="e.g., 5000"
+              value={formData.savingsGoal}
+              onChange={(e) => setFormData({ ...formData, savingsGoal: e.target.value })}
+            />
+          </div>
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-base font-medium"
           >
-            + Add Expense
-          </Link>
-        </div>
-
-        {/* Welcome Card */}
-        <div className="bg-white rounded-lg shadow p-6 mb-8">
-          <h2 className="text-xl font-semibold text-gray-800 mb-2">
-            Welcome back! 👋
-          </h2>
-          <p className="text-gray-600">
-            Monthly Income: QAR {userData.monthlyIncome} | Savings Goal: QAR {userData.savingsGoal}
-          </p>
-        </div>
-
-        {/* Placeholder for charts */}
-        <div className="grid md:grid-cols-2 gap-6">
-          <div className="bg-white rounded-lg shadow p-6">
-            <h3 className="text-lg font-semibold text-gray-800 mb-4">Weekly Spending</h3>
-            <div className="text-gray-500 text-center py-8">
-              No expenses yet. Add your first expense!
-            </div>
-          </div>
-          <div className="bg-white rounded-lg shadow p-6">
-            <h3 className="text-lg font-semibold text-gray-800 mb-4">Spending by Category</h3>
-            <div className="text-gray-500 text-center py-8">
-              No categories yet. Start tracking!
-            </div>
-          </div>
-        </div>
-
-        {/* Savings Goal Placeholder */}
-        <div className="mt-8 bg-white rounded-lg shadow p-6">
-          <h3 className="text-lg font-semibold text-gray-800 mb-4">Savings Progress</h3>
-          <div className="text-gray-500 text-center py-4">
-            Start saving to see your progress!
-          </div>
-        </div>
+            {loading ? 'Creating Account...' : 'Start Tracking'}
+          </button>
+        </form>
       </div>
     </div>
   );

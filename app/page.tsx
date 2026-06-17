@@ -2,8 +2,8 @@ import Link from 'next/link';
 
 export default function Home() {
   return (
-    <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white flex flex-col items-center justify-center p-4">
-      <div className="max-w-2xl text-center">
+    <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white flex items-center justify-center p-4">
+      <div className="text-center">
         <h1 className="text-5xl font-bold text-gray-900 mb-4">
           💰 PenneyWise
         </h1>
@@ -15,7 +15,7 @@ export default function Home() {
         </p>
         <Link
           href="/onboarding"
-          className="inline-block px-8 py-4 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors shadow-lg"
+          className="bg-blue-600 text-white px-8 py-4 rounded-lg hover:bg-blue-700 transition shadow-lg inline-block"
         >
           Get Started
         </Link>
