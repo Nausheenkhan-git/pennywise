@@ -3,6 +3,18 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  PieChart,
+  Pie,
+  Cell,
+  ResponsiveContainer,
+} from 'recharts';
 
 interface UserData {
   id: string;
@@ -19,16 +31,22 @@ interface Expense {
   date: string;
 }
 
+const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8', '#FF6B6B', '#845EC2'];
+
 export default function Dashboard() {
   const router = useRouter();
   const [userData, setUserData] = useState<UserData | null>(null);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [selectedMonth, setSelectedMonth] = useState(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  });
 
   useEffect(() => {
     const userId = localStorage.getItem('userId');
-    
+
     if (!userId) {
       router.push('/onboarding');
       return;
@@ -45,8 +63,8 @@ export default function Dashboard() {
       const userData = await userResponse.json();
       setUserData(userData);
 
-      // Fetch expenses
-      await fetchExpenses(userId);
+      // Fetch expenses for current month
+      await fetchExpenses(userId, selectedMonth);
     } catch (error) {
       console.error('Error fetching data:', error);
       localStorage.removeItem('userId');
@@ -56,9 +74,13 @@ export default function Dashboard() {
     }
   };
 
-  const fetchExpenses = async (userId: string) => {
+  const fetchExpenses = async (userId: string, month?: string) => {
     try {
-      const expenseResponse = await fetch(`/api/expenses?userId=${userId}`);
+      let url = `/api/expenses?userId=${userId}`;
+      if (month) {
+        url += `&month=${month}`;
+      }
+      const expenseResponse = await fetch(url);
       if (!expenseResponse.ok) throw new Error('Failed to fetch expenses');
       const expenseData = await expenseResponse.json();
       setExpenses(expenseData);
@@ -69,7 +91,7 @@ export default function Dashboard() {
 
   const handleDelete = async (expenseId: string) => {
     if (!confirm('Are you sure you want to delete this expense?')) return;
-    
+
     setDeleting(expenseId);
     try {
       const response = await fetch(`/api/expenses/${expenseId}`, {
@@ -79,7 +101,7 @@ export default function Dashboard() {
       if (response.ok) {
         const userId = localStorage.getItem('userId');
         if (userId) {
-          await fetchExpenses(userId);
+          await fetchExpenses(userId, selectedMonth);
         }
       } else {
         alert('Failed to delete expense');
@@ -90,6 +112,46 @@ export default function Dashboard() {
     } finally {
       setDeleting(null);
     }
+  };
+
+  const handleMonthChange = async (direction: 'prev' | 'next') => {
+    const [year, month] = selectedMonth.split('-').map(Number);
+    const newDate = new Date(year, month - 1 + (direction === 'prev' ? -1 : 1));
+    const newMonth = `${newDate.getFullYear()}-${String(newDate.getMonth() + 1).padStart(2, '0')}`;
+    setSelectedMonth(newMonth);
+    
+    const userId = localStorage.getItem('userId');
+    if (userId) {
+      await fetchExpenses(userId, newMonth);
+    }
+  };
+
+  // Helper functions for charts
+  const getWeeklyData = () => {
+    const last7Days = [...Array(7)].map((_, i) => {
+      const date = new Date();
+      date.setDate(date.getDate() - (6 - i));
+      return date.toISOString().split('T')[0];
+    });
+
+    return last7Days.map(date => ({
+      day: new Date(date).toLocaleDateString('en', { weekday: 'short' }),
+      amount: expenses
+        .filter(e => e.date.split('T')[0] === date)
+        .reduce((sum, e) => sum + e.amount, 0),
+    }));
+  };
+
+  const getCategoryData = () => {
+    const categoryTotals = expenses.reduce((acc: any, expense) => {
+      acc[expense.category] = (acc[expense.category] || 0) + expense.amount;
+      return acc;
+    }, {});
+
+    return Object.entries(categoryTotals).map(([name, value]) => ({
+      name,
+      value,
+    }));
   };
 
   // Calculate total spent
@@ -149,19 +211,84 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Charts Placeholder */}
-        <div className="grid md:grid-cols-2 gap-6 mb-6">
-          <div className="bg-white rounded-xl shadow-md p-6">
-            <h3 className="text-lg font-semibold text-gray-800 mb-4">📈 Weekly Spending</h3>
-            <div className="text-gray-600 text-center py-12 bg-gray-50 rounded-lg border border-gray-200">
-              {expenses.length === 0 ? 'No expenses yet. Add your first expense!' : 'Charts coming soon!'}
+        {/* Charts */}
+        {expenses.length > 0 && (
+          <div className="grid md:grid-cols-2 gap-6 mb-6">
+            {/* Weekly Spending Bar Chart */}
+            <div className="bg-white rounded-xl shadow-md p-6">
+              <h3 className="text-lg font-semibold text-gray-800 mb-4">📈 Weekly Spending</h3>
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={getWeeklyData()}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="day" />
+                  <YAxis />
+                  <Tooltip formatter={(value) => `QAR ${value}`} />
+                  <Bar dataKey="amount" fill="#8884d8" />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+
+            {/* Category Pie Chart */}
+            <div className="bg-white rounded-xl shadow-md p-6">
+              <h3 className="text-lg font-semibold text-gray-800 mb-4">🎯 Spending by Category</h3>
+              <ResponsiveContainer width="100%" height={300}>
+                <PieChart>
+                  <Pie
+                    data={getCategoryData()}
+                    cx="50%"
+                    cy="50%"
+                    labelLine={false}
+                    label={({ name, percent }) => `${name} ${((percent ?? 0) * 100).toFixed(0)}%`}
+                    outerRadius={80}
+                    fill="#8884d8"
+                    dataKey="value"
+                  >
+                    {getCategoryData().map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip formatter={(value) => `QAR ${value}`} />
+                </PieChart>
+              </ResponsiveContainer>
             </div>
           </div>
-          <div className="bg-white rounded-xl shadow-md p-6">
-            <h3 className="text-lg font-semibold text-gray-800 mb-4">🎯 Spending by Category</h3>
-            <div className="text-gray-600 text-center py-12 bg-gray-50 rounded-lg border border-gray-200">
-              {expenses.length === 0 ? 'No categories yet. Start tracking!' : 'Charts coming soon!'}
+        )}
+
+        {expenses.length === 0 && (
+          <div className="grid md:grid-cols-2 gap-6 mb-6">
+            <div className="bg-white rounded-xl shadow-md p-6">
+              <h3 className="text-lg font-semibold text-gray-800 mb-4">📈 Weekly Spending</h3>
+              <div className="text-gray-600 text-center py-12 bg-gray-50 rounded-lg border border-gray-200">
+                No expenses yet. Add your first expense!
+              </div>
             </div>
+            <div className="bg-white rounded-xl shadow-md p-6">
+              <h3 className="text-lg font-semibold text-gray-800 mb-4">🎯 Spending by Category</h3>
+              <div className="text-gray-600 text-center py-12 bg-gray-50 rounded-lg border border-gray-200">
+                No categories yet. Start tracking!
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Month Navigation */}
+        <div className="bg-white rounded-xl shadow-md p-6 mb-6">
+          <div className="flex items-center justify-between">
+            <button
+              onClick={() => handleMonthChange('prev')}
+              className="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300 transition font-medium"
+            >
+              ← Previous
+            </button>
+            <h3 className="text-lg font-semibold text-gray-800">
+              {new Date(selectedMonth + '-01').toLocaleString('default', { month: 'long', year: 'numeric' })}
+            </h3>
+            <button
+              onClick={() => handleMonthChange('next')}
+              className="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300 transition font-medium"
+            >
+              Next →
+            </button>
           </div>
         </div>
 
@@ -171,7 +298,7 @@ export default function Dashboard() {
             <h3 className="text-lg font-semibold text-gray-800">📝 Recent Expenses</h3>
             <span className="text-sm text-gray-500">{expenses.length} total</span>
           </div>
-          
+
           {expenses.length === 0 ? (
             <div className="text-gray-600 text-center py-8 bg-gray-50 rounded-lg border border-gray-200">
               No expenses yet. <Link href="/expenses/add" className="text-blue-600 hover:underline">Add your first expense</Link>
@@ -202,6 +329,12 @@ export default function Dashboard() {
                         {new Date(expense.date).toLocaleDateString()}
                       </td>
                       <td className="py-3 px-4">
+                        <Link
+                          href={`/expenses/edit/${expense.id}`}
+                          className="text-blue-600 hover:text-blue-800 text-sm font-medium mr-3"
+                        >
+                          Edit
+                        </Link>
                         <button
                           onClick={() => handleDelete(expense.id)}
                           disabled={deleting === expense.id}
