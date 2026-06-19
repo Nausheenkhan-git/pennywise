@@ -1,9 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -22,6 +16,7 @@ model User {
   updatedAt     DateTime  @updatedAt
   
   expenses      Expense[]
+  achievements  Achievement[]
 }
 
 model Expense {
@@ -36,4 +31,21 @@ model Expense {
   
   @@index([userId])
   @@index([date])
+}
+
+model Achievement {
+  id          String    @id @default(cuid())
+  userId      String
+  type        String    // 'goal_reached', 'savings_streak', 'expense_milestone'
+  name        String
+  description String
+  icon        String
+  earnedAt    DateTime  @default(now())
+  month       String    // Format: YYYY-MM
+  
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, type, month])
+  @@index([userId])
+  @@index([earnedAt])
 }

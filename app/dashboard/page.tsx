@@ -35,6 +35,17 @@ interface Expense {
   date: string;
 }
 
+interface Achievement {
+  id: string;
+  userId: string;
+  type: string;
+  name: string;
+  description: string;
+  icon: string;
+  earnedAt: string;
+  month: string;
+}
+
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8', '#FF6B6B', '#845EC2'];
 
 type ChartView = 'weekly' | 'monthly' | 'yearly';
@@ -51,6 +62,9 @@ export default function Dashboard() {
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   });
   const [chartView, setChartView] = useState<ChartView>('monthly');
+  const [achievements, setAchievements] = useState<Achievement[]>([]);
+  const [showAchievementAlert, setShowAchievementAlert] = useState(false);
+  const [newAchievement, setNewAchievement] = useState<Achievement | null>(null);
 
   useEffect(() => {
     const userId = localStorage.getItem('userId');
@@ -71,6 +85,7 @@ export default function Dashboard() {
       setUserData(userData);
 
       await fetchAllExpenses(userId);
+      await fetchAchievements(userId);
     } catch (error) {
       console.error('Error fetching data:', error);
       localStorage.removeItem('userId');
@@ -93,6 +108,18 @@ export default function Dashboard() {
     }
   };
 
+  const fetchAchievements = async (userId: string) => {
+    try {
+      const achResponse = await fetch(`/api/achievements?userId=${userId}`);
+      if (achResponse.ok) {
+        const achData = await achResponse.json();
+        setAchievements(achData);
+      }
+    } catch (error) {
+      console.error('Error fetching achievements:', error);
+    }
+  };
+
   const filterExpensesByMonth = (expenses: Expense[], month: string) => {
     const [year, monthNum] = month.split('-').map(Number);
     const filtered = expenses.filter(exp => {
@@ -108,6 +135,9 @@ export default function Dashboard() {
       if (!expenseResponse.ok) throw new Error('Failed to fetch expenses');
       const expenseData = await expenseResponse.json();
       setFilteredExpenses(expenseData);
+      
+      // Check for achievements after fetching month data
+      await checkAchievements(userId, month, expenseData);
     } catch (error) {
       console.error('Error fetching expenses:', error);
     }
@@ -147,6 +177,48 @@ export default function Dashboard() {
     const userId = localStorage.getItem('userId');
     if (userId) {
       await fetchExpensesForMonth(userId, newMonth);
+    }
+  };
+
+  // Check and award achievements
+  const checkAchievements = async (userId: string, month: string, expenses: Expense[]) => {
+    if (!userData) return;
+
+    const monthlySpending = expenses.reduce((sum, exp) => sum + exp.amount, 0);
+    const monthlySavings = userData.monthlyIncome - monthlySpending;
+
+    // Check if savings goal was reached
+    if (monthlySavings >= userData.savingsGoal) {
+      const existingAch = achievements.find(
+        a => a.type === 'goal_reached' && a.month === month
+      );
+
+      if (!existingAch) {
+        const response = await fetch('/api/achievements', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId,
+            type: 'goal_reached',
+            name: '🎯 Goal Achiever!',
+            description: `Saved ${monthlySavings.toFixed(2)} QAR in ${new Date(month + '-01').toLocaleString('default', { month: 'long', year: 'numeric' })}`,
+            icon: '🎯',
+            month,
+          }),
+        });
+
+        if (response.ok) {
+          const newAch = await response.json();
+          setNewAchievement(newAch);
+          setShowAchievementAlert(true);
+          setAchievements(prev => [newAch, ...prev]);
+          
+          // Auto-hide after 5 seconds
+          setTimeout(() => {
+            setShowAchievementAlert(false);
+          }, 5000);
+        }
+      }
     }
   };
 
@@ -331,15 +403,37 @@ export default function Dashboard() {
   return (
     <div className="min-h-screen bg-gray-100">
       <div className="max-w-7xl mx-auto px-4 py-8">
+        {/* Achievement Alert */}
+        {showAchievementAlert && newAchievement && (
+          <div className="fixed top-4 right-4 z-50 bg-green-100 border border-green-400 text-green-700 px-6 py-4 rounded-lg shadow-lg max-w-md animate-bounce">
+            <div className="flex items-center gap-3">
+              <span className="text-3xl">{newAchievement.icon}</span>
+              <div>
+                <h4 className="font-bold">🎉 New Achievement!</h4>
+                <p className="text-sm">{newAchievement.name}</p>
+                <p className="text-xs text-green-600">{newAchievement.description}</p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Header */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
           <h1 className="text-3xl font-bold text-gray-900">📊 Dashboard</h1>
-          <Link
-            href={`/expenses/add?month=${selectedMonth}`}
-            className="bg-blue-600 text-white px-6 py-2.5 rounded-lg hover:bg-blue-700 transition font-medium shadow-sm w-full sm:w-auto text-center"
-          >
-            + Add Expense
-          </Link>
+          <div className="flex gap-3 w-full sm:w-auto">
+            <Link
+              href="/profile"
+              className="bg-gray-600 text-white px-4 py-2.5 rounded-lg hover:bg-gray-700 transition font-medium shadow-sm text-center"
+            >
+              👤 Profile
+            </Link>
+            <Link
+              href={`/expenses/add?month=${selectedMonth}`}
+              className="bg-blue-600 text-white px-6 py-2.5 rounded-lg hover:bg-blue-700 transition font-medium shadow-sm w-full sm:w-auto text-center"
+            >
+              + Add Expense
+            </Link>
+          </div>
         </div>
 
         {/* User Info with Savings Goal Progress */}
@@ -436,7 +530,7 @@ export default function Dashboard() {
                     cx="50%"
                     cy="50%"
                     labelLine={false}
-                    label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                    label={({ name, percent }) => `${name} ${(((percent ?? 0) * 100).toFixed(0))}%`}
                     outerRadius={80}
                     fill="#8884d8"
                     dataKey="value"
