@@ -1,30 +1,54 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 
 export default function AddExpense() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [expense, setExpense] = useState({
     description: '',
     amount: '',
     category: 'Food',
+    date: '',
   });
 
   const categories = ['Food', 'Transport', 'Entertainment', 'Shopping', 'Education', 'Bills', 'Other'];
 
+  // Set default date to the selected month
+  useEffect(() => {
+    const monthParam = searchParams.get('month');
+    if (monthParam) {
+      const [year, month] = monthParam.split('-').map(Number);
+      const date = new Date(year, month - 1, 1);
+      setExpense(prev => ({
+        ...prev,
+        date: date.toISOString().split('T')[0],
+      }));
+    } else {
+      const today = new Date();
+      setExpense(prev => ({
+        ...prev,
+        date: today.toISOString().split('T')[0],
+      }));
+    }
+  }, [searchParams]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    setError(null);
 
     try {
       const userId = localStorage.getItem('userId');
       
       if (!userId) {
-        alert('Please sign in again');
-        router.push('/onboarding');
+        setError('Please sign in again');
+        setTimeout(() => router.push('/onboarding'), 1500);
+        setLoading(false);
         return;
       }
 
@@ -36,19 +60,33 @@ export default function AddExpense() {
           amount: parseFloat(expense.amount),
           category: expense.category,
           userId,
+          date: expense.date,
         }),
       });
 
-      if (response.ok) {
-        router.push('/dashboard');
-      } else {
-        const data = await response.json();
-        alert(data.error || 'Failed to add expense');
+      // Check if response is ok before trying to parse JSON
+      if (!response.ok) {
+        const text = await response.text();
+        let errorMessage = 'Failed to add expense';
+        try {
+          const data = JSON.parse(text);
+          errorMessage = data.error || errorMessage;
+        } catch {
+          // If parsing fails, use the text or default message
+          errorMessage = text || errorMessage;
+        }
+        setError(errorMessage);
         setLoading(false);
+        return;
       }
+
+      // If response is ok, parse JSON
+      const data = await response.json();
+      console.log('✅ Expense added:', data);
+      router.push('/dashboard');
     } catch (error) {
-      console.error('Error:', error);
-      alert('Network error. Please try again.');
+      console.error('❌ Error:', error);
+      setError('Network error. Please check your connection and try again.');
       setLoading(false);
     }
   };
@@ -64,6 +102,12 @@ export default function AddExpense() {
         </div>
 
         <div className="bg-white rounded-xl shadow-md p-6">
+          {error && (
+            <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg">
+              {error}
+            </div>
+          )}
+
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
               <label htmlFor="description" className="block text-sm font-semibold text-gray-700 mb-1">
@@ -113,6 +157,20 @@ export default function AddExpense() {
                   </option>
                 ))}
               </select>
+            </div>
+
+            <div>
+              <label htmlFor="date" className="block text-sm font-semibold text-gray-700 mb-1">
+                Date
+              </label>
+              <input
+                id="date"
+                type="date"
+                required
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition text-gray-900 bg-white"
+                value={expense.date}
+                onChange={(e) => setExpense({ ...expense, date: e.target.value })}
+              />
             </div>
 
             <button

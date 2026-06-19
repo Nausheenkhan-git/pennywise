@@ -8,6 +8,7 @@ export default function EditExpense({ params }: { params: { id: string } }) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [expense, setExpense] = useState({
     description: '',
     amount: '',
@@ -21,32 +22,43 @@ export default function EditExpense({ params }: { params: { id: string } }) {
     const fetchExpense = async () => {
       try {
         const response = await fetch(`/api/expenses/${params.id}`);
-        if (response.ok) {
-          const data = await response.json();
-          setExpense({
-            description: data.description,
-            amount: data.amount.toString(),
-            category: data.category,
-            date: data.date.split('T')[0],
-          });
-        } else {
-          alert('Expense not found');
-          router.push('/dashboard');
+        
+        if (!response.ok) {
+          const text = await response.text();
+          let errorMessage = 'Expense not found';
+          try {
+            const data = JSON.parse(text);
+            errorMessage = data.error || errorMessage;
+          } catch {
+            errorMessage = text || errorMessage;
+          }
+          setError(errorMessage);
+          setFetching(false);
+          return;
         }
+
+        const data = await response.json();
+        setExpense({
+          description: data.description,
+          amount: data.amount.toString(),
+          category: data.category,
+          date: new Date(data.date).toISOString().split('T')[0],
+        });
       } catch (error) {
-        console.error('Error fetching expense:', error);
-        alert('Failed to load expense');
+        console.error('❌ Error fetching expense:', error);
+        setError('Failed to load expense');
       } finally {
         setFetching(false);
       }
     };
 
     fetchExpense();
-  }, [params.id, router]);
+  }, [params.id]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    setError(null);
 
     try {
       const response = await fetch(`/api/expenses/${params.id}`, {
@@ -60,16 +72,24 @@ export default function EditExpense({ params }: { params: { id: string } }) {
         }),
       });
 
-      if (response.ok) {
-        router.push('/dashboard');
-      } else {
-        const data = await response.json();
-        alert(data.error || 'Failed to update expense');
+      if (!response.ok) {
+        const text = await response.text();
+        let errorMessage = 'Failed to update expense';
+        try {
+          const data = JSON.parse(text);
+          errorMessage = data.error || errorMessage;
+        } catch {
+          errorMessage = text || errorMessage;
+        }
+        setError(errorMessage);
         setLoading(false);
+        return;
       }
+
+      router.push('/dashboard');
     } catch (error) {
-      console.error('Error:', error);
-      alert('Network error. Please try again.');
+      console.error('❌ Error:', error);
+      setError('Network error. Please try again.');
       setLoading(false);
     }
   };
@@ -78,6 +98,23 @@ export default function EditExpense({ params }: { params: { id: string } }) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-xl text-gray-700">Loading expense...</div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center p-4">
+        <div className="bg-red-50 border border-red-200 rounded-lg p-6 max-w-md w-full">
+          <h2 className="text-red-700 font-semibold text-lg mb-2">Error</h2>
+          <p className="text-red-600 mb-4">{error}</p>
+          <Link
+            href="/dashboard"
+            className="inline-block bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+          >
+            Back to Dashboard
+          </Link>
+        </div>
       </div>
     );
   }
@@ -93,6 +130,12 @@ export default function EditExpense({ params }: { params: { id: string } }) {
         </div>
 
         <div className="bg-white rounded-xl shadow-md p-6">
+          {error && (
+            <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg">
+              {error}
+            </div>
+          )}
+
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
               <label htmlFor="description" className="block text-sm font-semibold text-gray-700 mb-1">

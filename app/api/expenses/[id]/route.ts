@@ -3,6 +3,41 @@ import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
+export async function GET(
+  request: Request,
+  context: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await context.params;
+
+    if (!id) {
+      return NextResponse.json(
+        { error: 'Expense ID is required' },
+        { status: 400 }
+      );
+    }
+
+    const expense = await prisma.expense.findUnique({
+      where: { id },
+    });
+
+    if (!expense) {
+      return NextResponse.json(
+        { error: 'Expense not found' },
+        { status: 404 }
+      );
+    }
+
+    return NextResponse.json(expense);
+  } catch (error) {
+    console.error('❌ Error fetching expense:', error);
+    return NextResponse.json(
+      { error: 'Failed to fetch expense' },
+      { status: 500 }
+    );
+  }
+}
+
 export async function DELETE(
   request: Request,
   context: { params: Promise<{ id: string }> }
@@ -23,7 +58,7 @@ export async function DELETE(
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error('Error deleting expense:', error);
+    console.error('❌ Error deleting expense:', error);
     return NextResponse.json(
       { error: 'Failed to delete expense' },
       { status: 500 }
@@ -47,6 +82,13 @@ export async function PUT(
       );
     }
 
+    if (!description || !amount || !category) {
+      return NextResponse.json(
+        { error: 'All fields are required' },
+        { status: 400 }
+      );
+    }
+
     const expense = await prisma.expense.update({
       where: { id },
       data: {
@@ -59,7 +101,7 @@ export async function PUT(
 
     return NextResponse.json(expense);
   } catch (error) {
-    console.error('Error updating expense:', error);
+    console.error('❌ Error updating expense:', error);
     return NextResponse.json(
       { error: 'Failed to update expense' },
       { status: 500 }
