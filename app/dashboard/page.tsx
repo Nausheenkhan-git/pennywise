@@ -57,13 +57,11 @@ export default function Dashboard() {
 
   const fetchData = async (userId: string) => {
     try {
-      // Fetch user data
       const userResponse = await fetch(`/api/user/${userId}`);
       if (!userResponse.ok) throw new Error('Failed to fetch user');
       const userData = await userResponse.json();
       setUserData(userData);
 
-      // Fetch expenses for current month
       await fetchExpenses(userId, selectedMonth);
     } catch (error) {
       console.error('Error fetching data:', error);
@@ -126,7 +124,6 @@ export default function Dashboard() {
     }
   };
 
-  // Helper functions for charts
   const getWeeklyData = () => {
     const last7Days = [...Array(7)].map((_, i) => {
       const date = new Date();
@@ -154,10 +151,7 @@ export default function Dashboard() {
     }));
   };
 
-  // Calculate total spent
   const totalSpent = expenses.reduce((sum, exp) => sum + exp.amount, 0);
-
-  // Get recent expenses (last 5)
   const recentExpenses = expenses.slice(0, 5);
 
   if (loading) {
@@ -180,11 +174,11 @@ export default function Dashboard() {
     <div className="min-h-screen bg-gray-100">
       <div className="max-w-7xl mx-auto px-4 py-8">
         {/* Header */}
-        <div className="flex justify-between items-center mb-8">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
           <h1 className="text-3xl font-bold text-gray-900">📊 Dashboard</h1>
           <Link
             href="/expenses/add"
-            className="bg-blue-600 text-white px-6 py-2.5 rounded-lg hover:bg-blue-700 transition font-medium shadow-sm"
+            className="bg-blue-600 text-white px-6 py-2.5 rounded-lg hover:bg-blue-700 transition font-medium shadow-sm w-full sm:w-auto text-center"
           >
             + Add Expense
           </Link>
@@ -214,7 +208,6 @@ export default function Dashboard() {
         {/* Charts */}
         {expenses.length > 0 && (
           <div className="grid md:grid-cols-2 gap-6 mb-6">
-            {/* Weekly Spending Bar Chart */}
             <div className="bg-white rounded-xl shadow-md p-6">
               <h3 className="text-lg font-semibold text-gray-800 mb-4">📈 Weekly Spending</h3>
               <ResponsiveContainer width="100%" height={300}>
@@ -227,8 +220,6 @@ export default function Dashboard() {
                 </BarChart>
               </ResponsiveContainer>
             </div>
-
-            {/* Category Pie Chart */}
             <div className="bg-white rounded-xl shadow-md p-6">
               <h3 className="text-lg font-semibold text-gray-800 mb-4">🎯 Spending by Category</h3>
               <ResponsiveContainer width="100%" height={300}>
@@ -238,7 +229,7 @@ export default function Dashboard() {
                     cx="50%"
                     cy="50%"
                     labelLine={false}
-                    label={({ name, percent }) => `${name} ${((percent ?? 0) * 100).toFixed(0)}%`}
+                    label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
                     outerRadius={80}
                     fill="#8884d8"
                     dataKey="value"
@@ -271,23 +262,23 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* Month Navigation */}
+        {/* Month Navigation - FIXED with better visibility */}
         <div className="bg-white rounded-xl shadow-md p-6 mb-6">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
             <button
               onClick={() => handleMonthChange('prev')}
-              className="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300 transition font-medium"
+              className="w-full sm:w-auto px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium shadow-sm"
             >
-              ← Previous
+              ← Previous Month
             </button>
-            <h3 className="text-lg font-semibold text-gray-800">
+            <h3 className="text-xl font-bold text-gray-900">
               {new Date(selectedMonth + '-01').toLocaleString('default', { month: 'long', year: 'numeric' })}
             </h3>
             <button
               onClick={() => handleMonthChange('next')}
-              className="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300 transition font-medium"
+              className="w-full sm:w-auto px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium shadow-sm"
             >
-              Next →
+              Next Month →
             </button>
           </div>
         </div>
