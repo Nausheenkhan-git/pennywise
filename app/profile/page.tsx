@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { currencies, formatAmount, savePreferredCurrency } from '../lib/currency';
 
 interface UserData {
   id: string;
@@ -10,6 +11,7 @@ interface UserData {
   monthlyIncome: number;
   savingsGoal: number;
   createdAt: string;
+  currency: string;
 }
 
 interface Achievement {
@@ -34,6 +36,9 @@ export default function Profile() {
   const [achievements, setAchievements] = useState<Achievement[]>([]);
   const [monthlyStats, setMonthlyStats] = useState<MonthlyStats[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedCurrency, setSelectedCurrency] = useState('QAR');
+  const [currencyUpdating, setCurrencyUpdating] = useState(false);
+  const [currencyMessage, setCurrencyMessage] = useState('');
 
   useEffect(() => {
     const userId = localStorage.getItem('userId');
@@ -51,6 +56,7 @@ export default function Profile() {
       if (!userRes.ok) throw new Error('Failed to fetch user');
       const user = await userRes.json();
       setUserData(user);
+      setSelectedCurrency(user.currency || 'QAR');
 
       // Fetch achievements
       const achRes = await fetch(`/api/achievements?userId=${userId}`);
@@ -69,6 +75,39 @@ export default function Profile() {
       console.error('Error fetching profile data:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleCurrencyChange = async (currencyCode: string) => {
+    setCurrencyUpdating(true);
+    setCurrencyMessage('');
+
+    try {
+      const userId = localStorage.getItem('userId');
+      const response = await fetch('/api/user/currency', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId,
+          currency: currencyCode,
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setSelectedCurrency(data.currency);
+        savePreferredCurrency(data.currency);
+        setCurrencyMessage(`✅ Currency updated to ${currencyCode}`);
+        setTimeout(() => setCurrencyMessage(''), 3000);
+      } else {
+        const error = await response.json();
+        alert(error.error || 'Failed to update currency');
+      }
+    } catch (error) {
+      console.error('Error updating currency:', error);
+      alert('Network error. Please try again.');
+    } finally {
+      setCurrencyUpdating(false);
     }
   };
 
@@ -91,6 +130,10 @@ export default function Profile() {
       </div>
     );
   }
+
+  const formatCurrency = (amount: number) => {
+    return formatAmount(amount, selectedCurrency);
+  };
 
   return (
     <div className="min-h-screen bg-gray-100">
@@ -118,15 +161,15 @@ export default function Profile() {
               <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mt-4">
                 <div>
                   <p className="text-sm text-gray-500">Monthly Income</p>
-                  <p className="text-lg font-semibold text-blue-600">QAR {userData.monthlyIncome}</p>
+                  <p className="text-lg font-semibold text-blue-600">{formatCurrency(userData.monthlyIncome)}</p>
                 </div>
                 <div>
                   <p className="text-sm text-gray-500">Savings Goal</p>
-                  <p className="text-lg font-semibold text-green-600">QAR {userData.savingsGoal}</p>
+                  <p className="text-lg font-semibold text-green-600">{formatCurrency(userData.savingsGoal)}</p>
                 </div>
                 <div>
                   <p className="text-sm text-gray-500">Total Saved</p>
-                  <p className="text-lg font-semibold text-purple-600">QAR {totalSaved.toFixed(2)}</p>
+                  <p className="text-lg font-semibold text-purple-600">{formatCurrency(totalSaved)}</p>
                 </div>
               </div>
             </div>
@@ -155,6 +198,44 @@ export default function Profile() {
           </div>
         </div>
 
+        {/* Currency Settings Section */}
+        <div className="bg-white rounded-xl shadow-md p-6 mb-6">
+          <h3 className="text-xl font-bold text-gray-800 mb-4">💰 Currency Settings</h3>
+          
+          {currencyMessage && (
+            <div className="mb-4 p-3 bg-green-50 border border-green-200 text-green-700 rounded-lg">
+              {currencyMessage}
+            </div>
+          )}
+
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {currencies.map((currency) => (
+              <button
+                key={currency.code}
+                onClick={() => handleCurrencyChange(currency.code)}
+                disabled={currencyUpdating}
+                className={`p-4 rounded-lg border-2 transition-all ${
+                  selectedCurrency === currency.code
+                    ? 'border-blue-600 bg-blue-50 shadow-md'
+                    : 'border-gray-200 hover:border-blue-300 hover:bg-gray-50'
+                }`}
+              >
+                <div className="text-center">
+                  <div className="text-3xl font-bold text-gray-900">{currency.symbol}</div>
+                  <div className="text-sm font-semibold text-gray-700 mt-1">{currency.code}</div>
+                  <div className="text-xs text-gray-500 mt-0.5">{currency.name}</div>
+                </div>
+              </button>
+            ))}
+          </div>
+          <div className="mt-4 p-3 bg-blue-50 rounded-lg">
+            <p className="text-sm text-gray-600">
+              💡 Your currency preference will be applied across the entire app.
+              All amounts will be displayed in your selected currency.
+            </p>
+          </div>
+        </div>
+
         {/* Achievements Section */}
         <div className="bg-white rounded-xl shadow-md p-6 mb-6">
           <h3 className="text-xl font-bold text-gray-800 mb-4">🏅 Achievements & Badges</h3>
@@ -163,7 +244,7 @@ export default function Profile() {
             <div className="text-center py-8">
               <p className="text-gray-500 text-lg mb-2">No achievements yet</p>
               <p className="text-gray-400">Start saving to earn badges! 💰</p>
-              <p className="text-sm text-gray-400 mt-2">Tip: Save at least {userData.savingsGoal} QAR in a month to earn your first badge!</p>
+              <p className="text-sm text-gray-400 mt-2">Tip: Save at least {formatCurrency(userData.savingsGoal)} in a month to earn your first badge!</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -211,9 +292,9 @@ export default function Profile() {
                       <td className="py-3 px-4 text-gray-800 font-medium">
                         {new Date(stat.month + '-01').toLocaleString('default', { month: 'long', year: 'numeric' })}
                       </td>
-                      <td className="py-3 px-4 text-gray-800">QAR {stat.spent.toFixed(2)}</td>
+                      <td className="py-3 px-4 text-gray-800">{formatCurrency(stat.spent)}</td>
                       <td className={`py-3 px-4 font-semibold ${stat.saved >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                        {stat.saved >= 0 ? 'QAR ' : '-QAR '}{Math.abs(stat.saved).toFixed(2)}
+                        {stat.saved >= 0 ? '' : '-'}{formatCurrency(Math.abs(stat.saved))}
                       </td>
                       <td className="py-3 px-4">
                         {stat.goalReached ? (

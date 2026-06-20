@@ -12,6 +12,7 @@ model User {
   email         String    @unique
   monthlyIncome Float
   savingsGoal   Float
+  currency      String    @default("QAR")  // Make sure this line exists
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
   

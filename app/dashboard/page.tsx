@@ -15,16 +15,17 @@ import {
   Pie,
   Cell,
   ResponsiveContainer,
-  LineChart,
-  Line,
   ComposedChart,
+  Line,
 } from 'recharts';
+import { formatAmount, getDefaultCurrency } from '../lib/currency';
 
 interface UserData {
   id: string;
   email: string;
   monthlyIncome: number;
   savingsGoal: number;
+  currency: string;
 }
 
 interface Expense {
@@ -42,6 +43,7 @@ interface Achievement {
   icon: string;
   earnedAt: string;
   month: string;
+  type: string;
 }
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8', '#FF6B6B', '#845EC2'];
@@ -63,14 +65,18 @@ export default function Dashboard() {
   const [achievements, setAchievements] = useState<Achievement[]>([]);
   const [showAchievementAlert, setShowAchievementAlert] = useState(false);
   const [newAchievement, setNewAchievement] = useState<Achievement | null>(null);
+  const [displayCurrency, setDisplayCurrency] = useState('QAR');
 
   useEffect(() => {
     const userId = localStorage.getItem('userId');
-
     if (!userId) {
       router.push('/onboarding');
       return;
     }
+
+    // Load preferred currency
+    const savedCurrency = getDefaultCurrency();
+    setDisplayCurrency(savedCurrency);
 
     fetchData(userId);
   }, [router]);
@@ -81,6 +87,11 @@ export default function Dashboard() {
       if (!userResponse.ok) throw new Error('Failed to fetch user');
       const userData = await userResponse.json();
       setUserData(userData);
+      
+      // Set currency from user data if available
+      if (userData.currency) {
+        setDisplayCurrency(userData.currency);
+      }
 
       await fetchAllExpenses(userId);
       await fetchAchievements(userId);
@@ -134,7 +145,6 @@ export default function Dashboard() {
       const expenseData = await expenseResponse.json();
       setFilteredExpenses(expenseData);
       
-      // Check for achievements after fetching month data
       await checkAndAwardAchievements(userId, month, expenseData);
     } catch (error) {
       console.error('Error fetching expenses:', error);
@@ -179,27 +189,18 @@ export default function Dashboard() {
     }
   };
 
-  // Check and award achievements
   const checkAndAwardAchievements = async (userId: string, month: string, expenses: Expense[]) => {
     if (!userData) return;
 
     const monthlySpending = expenses.reduce((sum, exp) => sum + exp.amount, 0);
     const monthlySavings = userData.monthlyIncome - monthlySpending;
 
-    console.log(`📊 Month: ${month}, Spending: ${monthlySpending}, Savings: ${monthlySavings}, Goal: ${userData.savingsGoal}`);
-
-    // Check if savings goal was reached
     if (monthlySavings >= userData.savingsGoal) {
-      console.log('🎯 Goal reached! Checking for existing achievement...');
-      
-      // Check if already awarded for this month
       const existingAch = achievements.find(
-        a => a.type === 'goal_reached' && a.month === month
+        (a: Achievement) => a.type === 'goal_reached' && a.month === month
       );
 
       if (!existingAch) {
-        console.log('🏆 Awarding achievement for month:', month);
-        
         const response = await fetch('/api/achievements', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -207,7 +208,7 @@ export default function Dashboard() {
             userId,
             type: 'goal_reached',
             name: '🎯 Goal Achiever!',
-            description: `Saved ${monthlySavings.toFixed(2)} QAR in ${new Date(month + '-01').toLocaleString('default', { month: 'long', year: 'numeric' })}`,
+            description: `Saved ${formatAmount(monthlySavings, displayCurrency)} in ${new Date(month + '-01').toLocaleString('default', { month: 'long', year: 'numeric' })}`,
             icon: '🎯',
             month,
           }),
@@ -219,20 +220,14 @@ export default function Dashboard() {
           setShowAchievementAlert(true);
           setAchievements(prev => [newAch, ...prev]);
           
-          // Auto-hide after 5 seconds
           setTimeout(() => {
             setShowAchievementAlert(false);
           }, 5000);
         }
-      } else {
-        console.log('✅ Achievement already exists for this month');
       }
-    } else {
-      console.log(`❌ Goal not reached. Savings: ${monthlySavings} < Goal: ${userData.savingsGoal}`);
     }
   };
 
-  // Get monthly spending with savings comparison - FILTER OUT FUTURE MONTHS
   const getMonthlyComparisonData = () => {
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     const currentYear = new Date().getFullYear();
@@ -255,7 +250,6 @@ export default function Dashboard() {
         income: monthlyIncome,
         savings: savings > 0 ? savings : 0,
         overspent: savings < 0 ? Math.abs(savings) : 0,
-        // Mark future months
         isFuture: index > currentMonth,
       };
     });
@@ -314,14 +308,17 @@ export default function Dashboard() {
     }));
   };
 
-  // Calculate current month savings
+  // Helper to format amounts with currency
+  const formatCurrency = (amount: number) => {
+    return formatAmount(amount, displayCurrency);
+  };
+
   const currentMonthSpending = filteredExpenses.reduce((sum, exp) => sum + exp.amount, 0);
   const currentMonthSavings = (userData?.monthlyIncome || 0) - currentMonthSpending;
   const savingsProgress = userData?.savingsGoal 
     ? (currentMonthSavings / userData.savingsGoal) * 100 
     : 0;
 
-  const totalSpent = filteredExpenses.reduce((sum, exp) => sum + exp.amount, 0);
   const recentExpenses = filteredExpenses.slice(0, 5);
 
   const renderChart = () => {
@@ -334,8 +331,8 @@ export default function Dashboard() {
               <BarChart data={getWeeklyData()}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="day" />
-                <YAxis />
-                <Tooltip formatter={(value) => `QAR ${value}`} />
+                <YAxis tickFormatter={(value) => formatCurrency(value)} />
+                <Tooltip formatter={(value) => formatCurrency(value as number)} />
                 <Bar dataKey="amount" fill="#8884d8" />
               </BarChart>
             </ResponsiveContainer>
@@ -350,16 +347,15 @@ export default function Dashboard() {
               <ComposedChart data={monthlyData}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="month" />
-                <YAxis />
+                <YAxis tickFormatter={(value) => formatCurrency(value)} />
                 <Tooltip 
                   formatter={(value, name) => {
-                    if (name === 'savings') return [`QAR ${value}`, 'Savings'];
-                    if (name === 'spending') return [`QAR ${value}`, 'Spending'];
-                    if (name === 'income') return [`QAR ${value}`, 'Income'];
-                    return [`QAR ${value}`, name];
+                    if (name === 'savings') return [formatCurrency(value as number), 'Savings'];
+                    if (name === 'spending') return [formatCurrency(value as number), 'Spending'];
+                    if (name === 'income') return [formatCurrency(value as number), 'Income'];
+                    return [formatCurrency(value as number), name];
                   }}
                   labelFormatter={(label) => {
-                    // Check if this is a future month
                     const dataItem = monthlyData.find(d => d.month === label);
                     if (dataItem?.isFuture) {
                       return `${label} (Future)`;
@@ -387,13 +383,13 @@ export default function Dashboard() {
               <ComposedChart data={yearlyData}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="year" />
-                <YAxis />
+                <YAxis tickFormatter={(value) => formatCurrency(value)} />
                 <Tooltip 
                   formatter={(value, name) => {
-                    if (name === 'savings') return [`QAR ${value}`, 'Savings'];
-                    if (name === 'spending') return [`QAR ${value}`, 'Spending'];
-                    if (name === 'income') return [`QAR ${value}`, 'Income'];
-                    return [`QAR ${value}`, name];
+                    if (name === 'savings') return [formatCurrency(value as number), 'Savings'];
+                    if (name === 'spending') return [formatCurrency(value as number), 'Spending'];
+                    if (name === 'income') return [formatCurrency(value as number), 'Income'];
+                    return [formatCurrency(value as number), name];
                   }}
                 />
                 <Legend />
@@ -428,7 +424,6 @@ export default function Dashboard() {
   return (
     <div className="min-h-screen bg-gray-100">
       <div className="max-w-7xl mx-auto px-4 py-8">
-        {/* Achievement Alert */}
         {showAchievementAlert && newAchievement && (
           <div className="fixed top-4 right-4 z-50 bg-green-100 border border-green-400 text-green-700 px-6 py-4 rounded-lg shadow-lg max-w-md animate-bounce">
             <div className="flex items-center gap-3">
@@ -442,10 +437,9 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* Header */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
           <h1 className="text-3xl font-bold text-gray-900">📊 Dashboard</h1>
-          <div className="flex gap-3 w-full sm:w-auto">
+          <div className="flex gap-3 w-full sm:w-auto flex-wrap">
             <Link
               href="/profile"
               className="inline-flex items-center gap-2 bg-gradient-to-r from-purple-600 to-indigo-600 text-white px-5 py-2.5 rounded-lg hover:from-purple-700 hover:to-indigo-700 transition font-medium shadow-sm text-center"
@@ -467,7 +461,6 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* User Info with Savings Goal Progress */}
         <div className="bg-white rounded-xl shadow-md p-6 mb-6">
           <h2 className="text-2xl font-bold text-gray-800 mb-4">
             Welcome back, <span className="text-blue-600">{userData.email.split('@')[0]}</span>! 👋
@@ -475,25 +468,24 @@ export default function Dashboard() {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
               <p className="text-sm font-medium text-gray-600">Monthly Income</p>
-              <p className="text-2xl font-bold text-blue-700">QAR {userData.monthlyIncome}</p>
+              <p className="text-2xl font-bold text-blue-700">{formatCurrency(userData.monthlyIncome)}</p>
             </div>
             <div className="bg-green-50 p-4 rounded-lg border border-green-100">
               <p className="text-sm font-medium text-gray-600">Savings Goal</p>
-              <p className="text-2xl font-bold text-green-700">QAR {userData.savingsGoal}</p>
+              <p className="text-2xl font-bold text-green-700">{formatCurrency(userData.savingsGoal)}</p>
             </div>
             <div className="bg-purple-50 p-4 rounded-lg border border-purple-100">
               <p className="text-sm font-medium text-gray-600">This Month's Spending</p>
-              <p className="text-2xl font-bold text-purple-700">QAR {currentMonthSpending.toFixed(2)}</p>
+              <p className="text-2xl font-bold text-purple-700">{formatCurrency(currentMonthSpending)}</p>
             </div>
             <div className={`p-4 rounded-lg border ${currentMonthSavings >= 0 ? 'bg-green-50 border-green-100' : 'bg-red-50 border-red-100'}`}>
               <p className="text-sm font-medium text-gray-600">This Month's Savings</p>
               <p className={`text-2xl font-bold ${currentMonthSavings >= 0 ? 'text-green-700' : 'text-red-700'}`}>
-                {currentMonthSavings >= 0 ? 'QAR ' : '-QAR '}{Math.abs(currentMonthSavings).toFixed(2)}
+                {currentMonthSavings >= 0 ? '' : '-'}{formatCurrency(Math.abs(currentMonthSavings))}
               </p>
             </div>
           </div>
           
-          {/* Savings Goal Progress Bar */}
           <div className="mt-4">
             <div className="flex justify-between text-sm text-gray-600 mb-1">
               <span>Savings Goal Progress</span>
@@ -510,7 +502,6 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Chart View Selector */}
         <div className="bg-white rounded-xl shadow-md p-4 mb-6">
           <div className="flex flex-wrap gap-2">
             <button
@@ -546,11 +537,9 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Charts Grid */}
         <div className="grid md:grid-cols-2 gap-6 mb-6">
           {renderChart()}
           
-          {/* Category Pie Chart - Always visible */}
           <div className="bg-white rounded-xl shadow-md p-6">
             <h3 className="text-lg font-semibold text-gray-800 mb-4">🎯 Spending by Category</h3>
             {filteredExpenses.length > 0 ? (
@@ -561,7 +550,7 @@ export default function Dashboard() {
                     cx="50%"
                     cy="50%"
                     labelLine={false}
-                    label={({ name, percent }) => `${name} ${(((percent ?? 0) * 100).toFixed(0))}%`}
+                    label={({ name, percent }) => `${name} ${((percent ?? 0) * 100).toFixed(0)}%`}
                     outerRadius={80}
                     fill="#8884d8"
                     dataKey="value"
@@ -570,7 +559,7 @@ export default function Dashboard() {
                       <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                     ))}
                   </Pie>
-                  <Tooltip formatter={(value) => `QAR ${value}`} />
+                  <Tooltip formatter={(value) => formatCurrency(value as number)} />
                 </PieChart>
               </ResponsiveContainer>
             ) : (
@@ -581,7 +570,6 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Month Navigation */}
         <div className="bg-white rounded-xl shadow-md p-6 mb-6">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
             <button
@@ -602,7 +590,6 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Recent Expenses */}
         <div className="bg-white rounded-xl shadow-md p-6">
           <div className="flex justify-between items-center mb-4">
             <h3 className="text-lg font-semibold text-gray-800">📝 Recent Expenses</h3>
@@ -637,7 +624,7 @@ export default function Dashboard() {
                           {expense.category}
                         </span>
                       </td>
-                      <td className="py-3 px-4 font-semibold text-gray-900">QAR {expense.amount.toFixed(2)}</td>
+                      <td className="py-3 px-4 font-semibold text-gray-900">{formatCurrency(expense.amount)}</td>
                       <td className="py-3 px-4 text-sm text-gray-600">
                         {new Date(expense.date).toLocaleDateString()}
                       </td>
