@@ -37,8 +37,6 @@ interface Expense {
 
 interface Achievement {
   id: string;
-  userId: string;
-  type: string;
   name: string;
   description: string;
   icon: string;
@@ -137,7 +135,7 @@ export default function Dashboard() {
       setFilteredExpenses(expenseData);
       
       // Check for achievements after fetching month data
-      await checkAchievements(userId, month, expenseData);
+      await checkAndAwardAchievements(userId, month, expenseData);
     } catch (error) {
       console.error('Error fetching expenses:', error);
     }
@@ -156,6 +154,7 @@ export default function Dashboard() {
         const userId = localStorage.getItem('userId');
         if (userId) {
           await fetchAllExpenses(userId);
+          await fetchAchievements(userId);
         }
       } else {
         alert('Failed to delete expense');
@@ -181,19 +180,26 @@ export default function Dashboard() {
   };
 
   // Check and award achievements
-  const checkAchievements = async (userId: string, month: string, expenses: Expense[]) => {
+  const checkAndAwardAchievements = async (userId: string, month: string, expenses: Expense[]) => {
     if (!userData) return;
 
     const monthlySpending = expenses.reduce((sum, exp) => sum + exp.amount, 0);
     const monthlySavings = userData.monthlyIncome - monthlySpending;
 
+    console.log(`📊 Month: ${month}, Spending: ${monthlySpending}, Savings: ${monthlySavings}, Goal: ${userData.savingsGoal}`);
+
     // Check if savings goal was reached
     if (monthlySavings >= userData.savingsGoal) {
+      console.log('🎯 Goal reached! Checking for existing achievement...');
+      
+      // Check if already awarded for this month
       const existingAch = achievements.find(
         a => a.type === 'goal_reached' && a.month === month
       );
 
       if (!existingAch) {
+        console.log('🏆 Awarding achievement for month:', month);
+        
         const response = await fetch('/api/achievements', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -218,14 +224,19 @@ export default function Dashboard() {
             setShowAchievementAlert(false);
           }, 5000);
         }
+      } else {
+        console.log('✅ Achievement already exists for this month');
       }
+    } else {
+      console.log(`❌ Goal not reached. Savings: ${monthlySavings} < Goal: ${userData.savingsGoal}`);
     }
   };
 
-  // Get monthly spending with savings comparison
+  // Get monthly spending with savings comparison - FILTER OUT FUTURE MONTHS
   const getMonthlyComparisonData = () => {
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     const currentYear = new Date().getFullYear();
+    const currentMonth = new Date().getMonth();
     const monthlyIncome = userData?.monthlyIncome || 0;
     
     return months.map((month, index) => {
@@ -244,6 +255,8 @@ export default function Dashboard() {
         income: monthlyIncome,
         savings: savings > 0 ? savings : 0,
         overspent: savings < 0 ? Math.abs(savings) : 0,
+        // Mark future months
+        isFuture: index > currentMonth,
       };
     });
   };
@@ -284,6 +297,7 @@ export default function Dashboard() {
         income: yearlyIncome,
         savings: yearlySavings > 0 ? yearlySavings : 0,
         overspent: yearlySavings < 0 ? Math.abs(yearlySavings) : 0,
+        isFuture: year > currentYear,
       };
     });
   };
@@ -344,6 +358,14 @@ export default function Dashboard() {
                     if (name === 'income') return [`QAR ${value}`, 'Income'];
                     return [`QAR ${value}`, name];
                   }}
+                  labelFormatter={(label) => {
+                    // Check if this is a future month
+                    const dataItem = monthlyData.find(d => d.month === label);
+                    if (dataItem?.isFuture) {
+                      return `${label} (Future)`;
+                    }
+                    return label;
+                  }}
                 />
                 <Legend />
                 <Bar dataKey="spending" fill="#FF8042" name="Spending" />
@@ -351,6 +373,9 @@ export default function Dashboard() {
                 <Line type="monotone" dataKey="income" stroke="#0088FE" strokeWidth={2} name="Income" />
               </ComposedChart>
             </ResponsiveContainer>
+            <p className="text-xs text-gray-500 mt-2 text-center">
+              * Future months are estimated and will update as you add expenses
+            </p>
           </div>
         );
       case 'yearly':
@@ -423,9 +448,15 @@ export default function Dashboard() {
           <div className="flex gap-3 w-full sm:w-auto">
             <Link
               href="/profile"
-              className="bg-gray-600 text-white px-4 py-2.5 rounded-lg hover:bg-gray-700 transition font-medium shadow-sm text-center"
+              className="inline-flex items-center gap-2 bg-gradient-to-r from-purple-600 to-indigo-600 text-white px-5 py-2.5 rounded-lg hover:from-purple-700 hover:to-indigo-700 transition font-medium shadow-sm text-center"
             >
-              👤 Profile
+              <span className="text-lg">🏆</span>
+              <span>Profile</span>
+              {achievements.length > 0 && (
+                <span className="bg-yellow-400 text-gray-800 text-xs font-bold rounded-full px-2 py-0.5">
+                  {achievements.length}
+                </span>
+              )}
             </Link>
             <Link
               href={`/expenses/add?month=${selectedMonth}`}
