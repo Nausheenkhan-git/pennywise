@@ -111,9 +111,11 @@ export default function Profile() {
     }
   };
 
-  // Calculate total savings
+  // Calculate totals
   const totalSaved = monthlyStats.reduce((sum, stat) => sum + (stat.saved > 0 ? stat.saved : 0), 0);
+  const totalSpent = monthlyStats.reduce((sum, stat) => sum + stat.spent, 0);
   const monthsWithGoal = monthlyStats.filter(s => s.goalReached).length;
+  const currentMonthStats = monthlyStats[monthlyStats.length - 1];
 
   if (loading) {
     return (
@@ -158,7 +160,7 @@ export default function Profile() {
             <div className="flex-1">
               <h2 className="text-2xl font-bold text-gray-800">{userData.email}</h2>
               <p className="text-gray-600">Member since {new Date(userData.createdAt).toLocaleDateString()}</p>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mt-4">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
                 <div>
                   <p className="text-sm text-gray-500">Monthly Income</p>
                   <p className="text-lg font-semibold text-blue-600">{formatCurrency(userData.monthlyIncome)}</p>
@@ -170,6 +172,10 @@ export default function Profile() {
                 <div>
                   <p className="text-sm text-gray-500">Total Saved</p>
                   <p className="text-lg font-semibold text-purple-600">{formatCurrency(totalSaved)}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500">Total Spent</p>
+                  <p className="text-lg font-semibold text-red-600">{formatCurrency(totalSpent)}</p>
                 </div>
               </div>
             </div>
@@ -197,6 +203,32 @@ export default function Profile() {
             <p className="text-sm text-gray-600">Status</p>
           </div>
         </div>
+
+        {/* Quick Stats - Current Month */}
+        {currentMonthStats && (
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
+            <div className="bg-gradient-to-r from-purple-50 to-purple-100 rounded-xl shadow-md p-4 text-center border border-purple-200">
+              <p className="text-sm text-gray-600">Current Month</p>
+              <p className="text-xl font-bold text-purple-700 mt-1">
+                {new Date(currentMonthStats.month + '-01').toLocaleString('default', { month: 'long', year: 'numeric' })}
+              </p>
+            </div>
+            <div className="bg-gradient-to-r from-red-50 to-red-100 rounded-xl shadow-md p-4 text-center border border-red-200">
+              <p className="text-sm text-gray-600">Spent</p>
+              <p className="text-xl font-bold text-red-700 mt-1">{formatCurrency(currentMonthStats.spent)}</p>
+            </div>
+            <div className={`bg-gradient-to-r rounded-xl shadow-md p-4 text-center border ${
+              currentMonthStats.saved >= 0 
+                ? 'from-green-50 to-green-100 border-green-200' 
+                : 'from-red-50 to-red-100 border-red-200'
+            }`}>
+              <p className="text-sm text-gray-600">Saved</p>
+              <p className={`text-xl font-bold mt-1 ${currentMonthStats.saved >= 0 ? 'text-green-700' : 'text-red-700'}`}>
+                {currentMonthStats.saved >= 0 ? '' : '-'}{formatCurrency(Math.abs(currentMonthStats.saved))}
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Currency Settings Section */}
         <div className="bg-white rounded-xl shadow-md p-6 mb-6">
@@ -315,6 +347,19 @@ export default function Profile() {
                   ))
                 )}
               </tbody>
+              {/* Total Row */}
+              {monthlyStats.length > 0 && (
+                <tfoot className="bg-gray-100 font-semibold">
+                  <tr>
+                    <td className="py-3 px-4 text-gray-800">Total</td>
+                    <td className="py-3 px-4 text-red-600">{formatCurrency(totalSpent)}</td>
+                    <td className={`py-3 px-4 ${totalSaved >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      {totalSaved >= 0 ? '' : '-'}{formatCurrency(Math.abs(totalSaved))}
+                    </td>
+                    <td className="py-3 px-4 text-gray-800">{monthlyStats.length} months</td>
+                  </tr>
+                </tfoot>
+              )}
             </table>
           </div>
         </div>
