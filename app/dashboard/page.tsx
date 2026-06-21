@@ -19,6 +19,7 @@ import {
   Line,
 } from 'recharts';
 import { formatAmount, getDefaultCurrency } from '../lib/currency';
+import { useTheme } from '../context/ThemeContext';
 
 interface UserData {
   id: string;
@@ -52,6 +53,7 @@ type ChartView = 'weekly' | 'monthly' | 'yearly';
 
 export default function Dashboard() {
   const router = useRouter();
+  const { theme } = useTheme();
   const [userData, setUserData] = useState<UserData | null>(null);
   const [allExpenses, setAllExpenses] = useState<Expense[]>([]);
   const [filteredExpenses, setFilteredExpenses] = useState<Expense[]>([]);
@@ -74,7 +76,6 @@ export default function Dashboard() {
       return;
     }
 
-    // Load preferred currency
     const savedCurrency = getDefaultCurrency();
     setDisplayCurrency(savedCurrency);
 
@@ -83,12 +84,21 @@ export default function Dashboard() {
 
   const fetchData = async (userId: string) => {
     try {
-      const userResponse = await fetch(`/api/user/${userId}`);
-      if (!userResponse.ok) throw new Error('Failed to fetch user');
+      console.log('📡 Fetching data for user:', userId);
+      
+      const userResponse = await fetch(`/api/user?id=${userId}`);
+      console.log('📡 User API Response status:', userResponse.status);
+      
+      if (!userResponse.ok) {
+        const errorText = await userResponse.text();
+        console.error('❌ User API Error:', errorText);
+        throw new Error(`Failed to fetch user: ${userResponse.status}`);
+      }
+      
       const userData = await userResponse.json();
+      console.log('✅ User data loaded:', userData);
       setUserData(userData);
       
-      // Set currency from user data if available
       if (userData.currency) {
         setDisplayCurrency(userData.currency);
       }
@@ -96,7 +106,7 @@ export default function Dashboard() {
       await fetchAllExpenses(userId);
       await fetchAchievements(userId);
     } catch (error) {
-      console.error('Error fetching data:', error);
+      console.error('❌ Error fetching data:', error);
       localStorage.removeItem('userId');
       router.push('/onboarding');
     } finally {
@@ -308,7 +318,6 @@ export default function Dashboard() {
     }));
   };
 
-  // Helper to format amounts with currency
   const formatCurrency = (amount: number) => {
     return formatAmount(amount, displayCurrency);
   };
@@ -322,17 +331,25 @@ export default function Dashboard() {
   const recentExpenses = filteredExpenses.slice(0, 5);
 
   const renderChart = () => {
+    const isDark = theme === 'dark';
+    const textColor = isDark ? '#9ca3af' : '#6b7280';
+    const gridColor = isDark ? '#374151' : '#e5e7eb';
+    
     switch (chartView) {
       case 'weekly':
         return (
-          <div className="bg-white rounded-xl shadow-md p-6">
-            <h3 className="text-lg font-semibold text-gray-800 mb-4">📈 Weekly Spending</h3>
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-6 transition-colors duration-200">
+            <h3 className="text-lg font-semibold text-gray-800 dark:text-white mb-4">📈 Weekly Spending</h3>
             <ResponsiveContainer width="100%" height={300}>
               <BarChart data={getWeeklyData()}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="day" />
-                <YAxis tickFormatter={(value) => formatCurrency(value)} />
-                <Tooltip formatter={(value) => formatCurrency(value as number)} />
+                <CartesianGrid strokeDasharray="3 3" stroke={gridColor} />
+                <XAxis dataKey="day" stroke={textColor} />
+                <YAxis tickFormatter={(value) => formatCurrency(value)} stroke={textColor} />
+                <Tooltip 
+                  formatter={(value) => formatCurrency(value as number)}
+                  contentStyle={{ backgroundColor: isDark ? '#1f2937' : '#fff', borderColor: isDark ? '#374151' : '#e5e7eb' }}
+                  labelStyle={{ color: isDark ? '#fff' : '#000' }}
+                />
                 <Bar dataKey="amount" fill="#8884d8" />
               </BarChart>
             </ResponsiveContainer>
@@ -341,13 +358,13 @@ export default function Dashboard() {
       case 'monthly':
         const monthlyData = getMonthlyComparisonData();
         return (
-          <div className="bg-white rounded-xl shadow-md p-6">
-            <h3 className="text-lg font-semibold text-gray-800 mb-4">📊 Monthly Spending vs Savings ({new Date().getFullYear()})</h3>
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-6 transition-colors duration-200">
+            <h3 className="text-lg font-semibold text-gray-800 dark:text-white mb-4">📊 Monthly Spending vs Savings ({new Date().getFullYear()})</h3>
             <ResponsiveContainer width="100%" height={350}>
               <ComposedChart data={monthlyData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="month" />
-                <YAxis tickFormatter={(value) => formatCurrency(value)} />
+                <CartesianGrid strokeDasharray="3 3" stroke={gridColor} />
+                <XAxis dataKey="month" stroke={textColor} />
+                <YAxis tickFormatter={(value) => formatCurrency(value)} stroke={textColor} />
                 <Tooltip 
                   formatter={(value, name) => {
                     if (name === 'savings') return [formatCurrency(value as number), 'Savings'];
@@ -362,6 +379,8 @@ export default function Dashboard() {
                     }
                     return label;
                   }}
+                  contentStyle={{ backgroundColor: isDark ? '#1f2937' : '#fff', borderColor: isDark ? '#374151' : '#e5e7eb' }}
+                  labelStyle={{ color: isDark ? '#fff' : '#000' }}
                 />
                 <Legend />
                 <Bar dataKey="spending" fill="#FF8042" name="Spending" />
@@ -369,7 +388,7 @@ export default function Dashboard() {
                 <Line type="monotone" dataKey="income" stroke="#0088FE" strokeWidth={2} name="Income" />
               </ComposedChart>
             </ResponsiveContainer>
-            <p className="text-xs text-gray-500 mt-2 text-center">
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-2 text-center">
               * Future months are estimated and will update as you add expenses
             </p>
           </div>
@@ -377,13 +396,13 @@ export default function Dashboard() {
       case 'yearly':
         const yearlyData = getYearlyData();
         return (
-          <div className="bg-white rounded-xl shadow-md p-6">
-            <h3 className="text-lg font-semibold text-gray-800 mb-4">📈 Yearly Spending vs Savings Trend</h3>
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-6 transition-colors duration-200">
+            <h3 className="text-lg font-semibold text-gray-800 dark:text-white mb-4">📈 Yearly Spending vs Savings Trend</h3>
             <ResponsiveContainer width="100%" height={350}>
               <ComposedChart data={yearlyData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="year" />
-                <YAxis tickFormatter={(value) => formatCurrency(value)} />
+                <CartesianGrid strokeDasharray="3 3" stroke={gridColor} />
+                <XAxis dataKey="year" stroke={textColor} />
+                <YAxis tickFormatter={(value) => formatCurrency(value)} stroke={textColor} />
                 <Tooltip 
                   formatter={(value, name) => {
                     if (name === 'savings') return [formatCurrency(value as number), 'Savings'];
@@ -391,6 +410,8 @@ export default function Dashboard() {
                     if (name === 'income') return [formatCurrency(value as number), 'Income'];
                     return [formatCurrency(value as number), name];
                   }}
+                  contentStyle={{ backgroundColor: isDark ? '#1f2937' : '#fff', borderColor: isDark ? '#374151' : '#e5e7eb' }}
+                  labelStyle={{ color: isDark ? '#fff' : '#000' }}
                 />
                 <Legend />
                 <Bar dataKey="spending" fill="#FF8042" name="Spending" />
@@ -407,38 +428,38 @@ export default function Dashboard() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-xl text-gray-700">Loading...</div>
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+        <div className="text-xl text-gray-700 dark:text-gray-300">Loading...</div>
       </div>
     );
   }
 
   if (!userData) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-xl text-gray-700">User not found. Please sign up again.</div>
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+        <div className="text-xl text-gray-700 dark:text-gray-300">User not found. Please sign up again.</div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-100">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-200">
       <div className="max-w-7xl mx-auto px-4 py-8">
         {showAchievementAlert && newAchievement && (
-          <div className="fixed top-4 right-4 z-50 bg-green-100 border border-green-400 text-green-700 px-6 py-4 rounded-lg shadow-lg max-w-md animate-bounce">
+          <div className="fixed top-4 right-4 z-50 bg-green-100 dark:bg-green-900/80 border border-green-400 dark:border-green-700 text-green-700 dark:text-green-300 px-6 py-4 rounded-lg shadow-lg max-w-md animate-bounce">
             <div className="flex items-center gap-3">
               <span className="text-3xl">{newAchievement.icon}</span>
               <div>
                 <h4 className="font-bold">🎉 New Achievement!</h4>
                 <p className="text-sm">{newAchievement.name}</p>
-                <p className="text-xs text-green-600">{newAchievement.description}</p>
+                <p className="text-xs text-green-600 dark:text-green-400">{newAchievement.description}</p>
               </div>
             </div>
           </div>
         )}
 
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">📊 Dashboard</h1>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">📊 Dashboard</h1>
           <div className="flex gap-3 w-full sm:w-auto flex-wrap">
             <Link
               href="/profile"
@@ -461,37 +482,37 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <div className="bg-white rounded-xl shadow-md p-6 mb-6">
-          <h2 className="text-2xl font-bold text-gray-800 mb-4">
-            Welcome back, <span className="text-blue-600">{userData.email.split('@')[0]}</span>! 👋
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-6 mb-6 transition-colors duration-200">
+          <h2 className="text-2xl font-bold text-gray-800 dark:text-white mb-4">
+            Welcome back, <span className="text-blue-600 dark:text-blue-400">{userData.email.split('@')[0]}</span>! 👋
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
-              <p className="text-sm font-medium text-gray-600">Monthly Income</p>
-              <p className="text-2xl font-bold text-blue-700">{formatCurrency(userData.monthlyIncome)}</p>
+            <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border border-blue-100 dark:border-blue-800">
+              <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Monthly Income</p>
+              <p className="text-2xl font-bold text-blue-700 dark:text-blue-400">{formatCurrency(userData.monthlyIncome)}</p>
             </div>
-            <div className="bg-green-50 p-4 rounded-lg border border-green-100">
-              <p className="text-sm font-medium text-gray-600">Savings Goal</p>
-              <p className="text-2xl font-bold text-green-700">{formatCurrency(userData.savingsGoal)}</p>
+            <div className="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg border border-green-100 dark:border-green-800">
+              <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Savings Goal</p>
+              <p className="text-2xl font-bold text-green-700 dark:text-green-400">{formatCurrency(userData.savingsGoal)}</p>
             </div>
-            <div className="bg-purple-50 p-4 rounded-lg border border-purple-100">
-              <p className="text-sm font-medium text-gray-600">This Month's Spending</p>
-              <p className="text-2xl font-bold text-purple-700">{formatCurrency(currentMonthSpending)}</p>
+            <div className="bg-purple-50 dark:bg-purple-900/20 p-4 rounded-lg border border-purple-100 dark:border-purple-800">
+              <p className="text-sm font-medium text-gray-600 dark:text-gray-400">This Month's Spending</p>
+              <p className="text-2xl font-bold text-purple-700 dark:text-purple-400">{formatCurrency(currentMonthSpending)}</p>
             </div>
-            <div className={`p-4 rounded-lg border ${currentMonthSavings >= 0 ? 'bg-green-50 border-green-100' : 'bg-red-50 border-red-100'}`}>
-              <p className="text-sm font-medium text-gray-600">This Month's Savings</p>
-              <p className={`text-2xl font-bold ${currentMonthSavings >= 0 ? 'text-green-700' : 'text-red-700'}`}>
+            <div className={`p-4 rounded-lg border ${currentMonthSavings >= 0 ? 'bg-green-50 dark:bg-green-900/20 border-green-100 dark:border-green-800' : 'bg-red-50 dark:bg-red-900/20 border-red-100 dark:border-red-800'}`}>
+              <p className="text-sm font-medium text-gray-600 dark:text-gray-400">This Month's Savings</p>
+              <p className={`text-2xl font-bold ${currentMonthSavings >= 0 ? 'text-green-700 dark:text-green-400' : 'text-red-700 dark:text-red-400'}`}>
                 {currentMonthSavings >= 0 ? '' : '-'}{formatCurrency(Math.abs(currentMonthSavings))}
               </p>
             </div>
           </div>
           
           <div className="mt-4">
-            <div className="flex justify-between text-sm text-gray-600 mb-1">
+            <div className="flex justify-between text-sm text-gray-600 dark:text-gray-400 mb-1">
               <span>Savings Goal Progress</span>
               <span>{Math.min(Math.round(savingsProgress), 100)}%</span>
             </div>
-            <div className="w-full bg-gray-200 rounded-full h-2.5">
+            <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5">
               <div 
                 className={`h-2.5 rounded-full transition-all duration-500 ${
                   savingsProgress >= 100 ? 'bg-green-600' : 'bg-blue-600'
@@ -502,14 +523,14 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <div className="bg-white rounded-xl shadow-md p-4 mb-6">
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-4 mb-6 transition-colors duration-200">
           <div className="flex flex-wrap gap-2">
             <button
               onClick={() => setChartView('weekly')}
               className={`px-4 py-2 rounded-lg font-medium transition ${
                 chartView === 'weekly'
                   ? 'bg-blue-600 text-white'
-                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                  : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
               }`}
             >
               Weekly
@@ -519,7 +540,7 @@ export default function Dashboard() {
               className={`px-4 py-2 rounded-lg font-medium transition ${
                 chartView === 'monthly'
                   ? 'bg-blue-600 text-white'
-                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                  : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
               }`}
             >
               Monthly Comparison
@@ -529,7 +550,7 @@ export default function Dashboard() {
               className={`px-4 py-2 rounded-lg font-medium transition ${
                 chartView === 'yearly'
                   ? 'bg-blue-600 text-white'
-                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                  : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
               }`}
             >
               Yearly Trend
@@ -540,8 +561,8 @@ export default function Dashboard() {
         <div className="grid md:grid-cols-2 gap-6 mb-6">
           {renderChart()}
           
-          <div className="bg-white rounded-xl shadow-md p-6">
-            <h3 className="text-lg font-semibold text-gray-800 mb-4">🎯 Spending by Category</h3>
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-6 transition-colors duration-200">
+            <h3 className="text-lg font-semibold text-gray-800 dark:text-white mb-4">🎯 Spending by Category</h3>
             {filteredExpenses.length > 0 ? (
               <ResponsiveContainer width="100%" height={300}>
                 <PieChart>
@@ -559,18 +580,22 @@ export default function Dashboard() {
                       <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                     ))}
                   </Pie>
-                  <Tooltip formatter={(value) => formatCurrency(value as number)} />
+                  <Tooltip 
+                    formatter={(value) => formatCurrency(value as number)}
+                    contentStyle={{ backgroundColor: theme === 'dark' ? '#1f2937' : '#fff', borderColor: theme === 'dark' ? '#374151' : '#e5e7eb' }}
+                    labelStyle={{ color: theme === 'dark' ? '#fff' : '#000' }}
+                  />
                 </PieChart>
               </ResponsiveContainer>
             ) : (
-              <div className="text-gray-600 text-center py-12 bg-gray-50 rounded-lg border border-gray-200">
+              <div className="text-gray-600 dark:text-gray-400 text-center py-12 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-700">
                 No expenses this month
               </div>
             )}
           </div>
         </div>
 
-        <div className="bg-white rounded-xl shadow-md p-6 mb-6">
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-6 mb-6 transition-colors duration-200">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
             <button
               onClick={() => handleMonthChange('prev')}
@@ -578,7 +603,7 @@ export default function Dashboard() {
             >
               ← Previous Month
             </button>
-            <h3 className="text-xl font-bold text-gray-900">
+            <h3 className="text-xl font-bold text-gray-900 dark:text-white">
               {new Date(selectedMonth + '-01').toLocaleString('default', { month: 'long', year: 'numeric' })}
             </h3>
             <button
@@ -590,55 +615,55 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <div className="bg-white rounded-xl shadow-md p-6">
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-6 transition-colors duration-200">
           <div className="flex justify-between items-center mb-4">
-            <h3 className="text-lg font-semibold text-gray-800">📝 Recent Expenses</h3>
-            <span className="text-sm text-gray-500">{filteredExpenses.length} total</span>
+            <h3 className="text-lg font-semibold text-gray-800 dark:text-white">📝 Recent Expenses</h3>
+            <span className="text-sm text-gray-500 dark:text-gray-400">{filteredExpenses.length} total</span>
           </div>
 
           {filteredExpenses.length === 0 ? (
-            <div className="text-gray-600 text-center py-8 bg-gray-50 rounded-lg border border-gray-200">
+            <div className="text-gray-600 dark:text-gray-400 text-center py-8 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-700">
               No expenses for {new Date(selectedMonth + '-01').toLocaleString('default', { month: 'long', year: 'numeric' })}. 
-              <Link href={`/expenses/add?month=${selectedMonth}`} className="text-blue-600 hover:underline ml-1">
+              <Link href={`/expenses/add?month=${selectedMonth}`} className="text-blue-600 dark:text-blue-400 hover:underline ml-1">
                 Add your first expense
               </Link>
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full">
-                <thead className="bg-gray-50">
+                <thead className="bg-gray-50 dark:bg-gray-700/50">
                   <tr>
-                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Description</th>
-                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Category</th>
-                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Amount</th>
-                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Date</th>
-                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Action</th>
+                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700 dark:text-gray-300">Description</th>
+                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700 dark:text-gray-300">Category</th>
+                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700 dark:text-gray-300">Amount</th>
+                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700 dark:text-gray-300">Date</th>
+                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700 dark:text-gray-300">Action</th>
                   </tr>
                 </thead>
                 <tbody>
                   {recentExpenses.map((expense) => (
-                    <tr key={expense.id} className="border-t border-gray-100 hover:bg-gray-50">
-                      <td className="py-3 px-4 text-gray-800">{expense.description}</td>
+                    <tr key={expense.id} className="border-t border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                      <td className="py-3 px-4 text-gray-800 dark:text-gray-200">{expense.description}</td>
                       <td className="py-3 px-4">
-                        <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-medium">
+                        <span className="px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 rounded-full text-xs font-medium">
                           {expense.category}
                         </span>
                       </td>
-                      <td className="py-3 px-4 font-semibold text-gray-900">{formatCurrency(expense.amount)}</td>
-                      <td className="py-3 px-4 text-sm text-gray-600">
+                      <td className="py-3 px-4 font-semibold text-gray-900 dark:text-white">{formatCurrency(expense.amount)}</td>
+                      <td className="py-3 px-4 text-sm text-gray-600 dark:text-gray-400">
                         {new Date(expense.date).toLocaleDateString()}
                       </td>
                       <td className="py-3 px-4">
                         <Link
                           href={`/expenses/edit/${expense.id}`}
-                          className="text-blue-600 hover:text-blue-800 text-sm font-medium mr-3"
+                          className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 text-sm font-medium mr-3"
                         >
                           Edit
                         </Link>
                         <button
                           onClick={() => handleDelete(expense.id)}
                           disabled={deleting === expense.id}
-                          className="text-red-600 hover:text-red-800 text-sm font-medium disabled:opacity-50"
+                          className="text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 text-sm font-medium disabled:opacity-50"
                         >
                           {deleting === expense.id ? 'Deleting...' : 'Delete'}
                         </button>
@@ -649,7 +674,7 @@ export default function Dashboard() {
               </table>
               {filteredExpenses.length > 5 && (
                 <div className="text-center mt-4">
-                  <span className="text-sm text-gray-500">Showing 5 of {filteredExpenses.length} expenses</span>
+                  <span className="text-sm text-gray-500 dark:text-gray-400">Showing 5 of {filteredExpenses.length} expenses</span>
                 </div>
               )}
             </div>
