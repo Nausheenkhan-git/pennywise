@@ -53,7 +53,17 @@ type ChartView = 'weekly' | 'monthly' | 'yearly';
 
 export default function Dashboard() {
   const router = useRouter();
-  const { theme } = useTheme();
+  // Safe theme usage with try-catch
+  let theme = 'light';
+  let toggleTheme = () => {};
+  try {
+    const themeContext = useTheme();
+    theme = themeContext.theme;
+    toggleTheme = themeContext.toggleTheme;
+  } catch (error) {
+    console.warn('Theme context not available, using defaults');
+  }
+
   const [userData, setUserData] = useState<UserData | null>(null);
   const [allExpenses, setAllExpenses] = useState<Expense[]>([]);
   const [filteredExpenses, setFilteredExpenses] = useState<Expense[]>([]);

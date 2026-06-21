@@ -33,7 +33,17 @@ interface MonthlyStats {
 
 export default function Profile() {
   const router = useRouter();
-  const { theme, toggleTheme } = useTheme();
+  // Use theme with error handling - wrap in try-catch to prevent crashes
+  let theme = 'light';
+  let toggleTheme = () => {};
+  try {
+    const themeContext = useTheme();
+    theme = themeContext.theme;
+    toggleTheme = themeContext.toggleTheme;
+  } catch (error) {
+    console.warn('Theme context not available, using defaults');
+  }
+
   const [userData, setUserData] = useState<UserData | null>(null);
   const [achievements, setAchievements] = useState<Achievement[]>([]);
   const [monthlyStats, setMonthlyStats] = useState<MonthlyStats[]>([]);
@@ -68,14 +78,12 @@ export default function Profile() {
       setUserData(user);
       setSelectedCurrency(user.currency || 'QAR');
 
-      // Fetch achievements
       const achRes = await fetch(`/api/achievements?userId=${userId}`);
       if (achRes.ok) {
         const achData = await achRes.json();
         setAchievements(achData);
       }
 
-      // Fetch monthly stats
       const statsRes = await fetch(`/api/stats?userId=${userId}`);
       if (statsRes.ok) {
         const statsData = await statsRes.json();
@@ -267,6 +275,22 @@ export default function Profile() {
             </div>
             <div className="mt-2 text-xs text-gray-500 dark:text-gray-400">
               Current: {theme === 'dark' ? '🌙 Dark' : '☀️ Light'}
+            </div>
+          </div>
+
+          {/* Budget Alert Settings Link */}
+          <div className="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+            <div className="flex items-center justify-between">
+              <div>
+                <h4 className="font-semibold text-gray-800 dark:text-white">🔔 Budget Alerts</h4>
+                <p className="text-sm text-gray-600 dark:text-gray-400">Configure spending alerts</p>
+              </div>
+              <Link
+                href="/settings/alerts"
+                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition font-medium text-sm"
+              >
+                Configure
+              </Link>
             </div>
           </div>
 

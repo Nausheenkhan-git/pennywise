@@ -16,31 +16,37 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    setMounted(true);
     // Check localStorage for saved theme
     const savedTheme = localStorage.getItem('theme') as Theme | null;
     // Check system preference
     const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
     
+    let initialTheme: Theme = 'light';
     if (savedTheme) {
-      setTheme(savedTheme);
+      initialTheme = savedTheme;
     } else if (systemPrefersDark) {
-      setTheme('dark');
-    } else {
-      setTheme('light');
+      initialTheme = 'dark';
     }
+    
+    console.log('🌓 Initial theme from localStorage/system:', initialTheme);
+    setTheme(initialTheme);
+    setMounted(true);
   }, []);
 
   useEffect(() => {
     if (mounted) {
-      // Update document class
-      if (theme === 'dark') {
-        document.documentElement.classList.add('dark');
-      } else {
-        document.documentElement.classList.remove('dark');
-      }
+      const htmlElement = document.documentElement;
+      
+      // Remove both classes first to ensure clean state
+      htmlElement.classList.remove('light', 'dark');
+      
+      // Add the current theme class
+      htmlElement.classList.add(theme);
+      
       // Save to localStorage
       localStorage.setItem('theme', theme);
+      
+      console.log('🌓 Theme updated to:', theme);
     }
   }, [theme, mounted]);
 
@@ -48,7 +54,11 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     setTheme(prev => prev === 'light' ? 'dark' : 'light');
   };
 
-  // Return children with context value immediately
+  // Don't render children until mounted to avoid hydration mismatch
+  if (!mounted) {
+    return <>{children}</>;
+  }
+
   return (
     <ThemeContext.Provider value={{ theme, toggleTheme }}>
       {children}

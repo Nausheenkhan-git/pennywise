@@ -7,7 +7,7 @@ const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: "PenneyWise - Student Budget Tracker",
-  description: "Track expenses, set budgets, and achieve savings goals",
+  description: "Track expenses, set savings goals, and visualize your spending habits",
 };
 
 export default function RootLayout({
@@ -17,7 +17,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={`${inter.className}`}>
+      <body className={inter.className}>
         <ThemeProvider>
           {children}
         </ThemeProvider>
