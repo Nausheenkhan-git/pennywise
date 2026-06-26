@@ -6,7 +6,7 @@ import { ThemeProvider } from "./context/ThemeContext";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "PenneyWise - Student Budget Tracker",
+  title: "PenneyWise - Smart Budgeting",
   description: "Track expenses, set savings goals, and visualize your spending habits",
 };
 
