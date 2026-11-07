@@ -235,9 +235,9 @@ The application is fully responsive and works on:
 - Lucide - Icon Library
 
 ## 📞 Contact
-- GitHub: @Nausheenkhan-git
+- GitHub: Nausheenkhan-git
 - Project Link: https://github.com/Nausheenkhan-git/pennywise
-- Live Demo: [https://pennywise-sooty.vercel.app](https://pennywise-sooty.vercel.app/)
+- Live : [https://pennywise-sooty.vercel.app](https://pennywise-sooty.vercel.app/)
 
 ## 🌟 Show Your Support
 If you found this project helpful, please give it a ⭐ on GitHub!
